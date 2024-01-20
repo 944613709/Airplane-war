@@ -1,3 +1,6 @@
+import sys
+import traceback
+
 import pygame
 from pygame.locals import *
 import random
@@ -22,7 +25,7 @@ over1=pygame.transform.scale(over,(460,143))
 #pygame工具先初始化（检查）
 pygame.init()
 #创建窗口
-window=pygame.display.set_mode((512,768))
+screen=pygame.display.set_mode((512,768))
 #设置标题
 pygame.display.set_caption('小陈的飞机大战')
 #设置logo
@@ -62,13 +65,21 @@ def handleEvent():
 
         if event.type==MOUSEBUTTONDOWN:
                 if event.button==1:
-                    #如果鼠标点左键且现在是在ready状态下，如果鼠标点的是以下这个范围，则切换到running状态
-                    if state==states['ready']:
+                    #如果鼠标点左键且现在是在menu状态下，如果鼠标点的是以下这个范围，则切换到running状态
+                    if state==states['menu']:
                         if 143<=event.pos[0]<=369 and 470<=event.pos[1]<=530:
                             state=states['running']
                             print(state)
                     elif state==states['running']:
                         player.shoot()
+
+                    elif state == states['leaderboard']:
+                        # 处理排行榜按钮点击事件
+                        state = states['menu']  # 返回主菜单
+
+                    elif state == states['settings']:
+                        # 处理设置按钮点击事件
+                        state = states['menu']  # 返回主菜单
 
 
 
@@ -81,7 +92,7 @@ def fillText(text,size,position):
     #               内容  抗锯齿   颜色
     TF=TextFont.render(text,True,(255,255,255))
     #最后传输到窗口上
-    window.blit(TF,position)
+    screen.blit(TF,position)
 
 #时间间隔方法
 lastTime=0  #游戏刚开始时，是0
@@ -158,9 +169,10 @@ class Background():
     #设计功能--显示功能
     def paint(self):
         #窗口使用传输方法  传谁   传到哪个位置
-        window.blit(self.img,(self.x,self.y))
+        screen.blit(self.img,(self.x,self.y))
         #显示第二张背景
-        window.blit(self.img,(self.x2,self.y2))
+        screen.blit(self.img,(self.x2,self.y2))
+
     #移动功能
     def move(self):
         self.y+=1
@@ -189,7 +201,7 @@ class Player():
         # 设计功能--显示功能
     def paint(self):
         # 窗口使用传输方法  传谁   传到哪个位置
-        window.blit(self.img, (self.x, self.y))
+        screen.blit(self.img, (self.x, self.y))
     def shoot(self):
         #生成子弹对象
         bullets.append(Bullet(20,56,self.x+self.width/2-10,self.y-20-56,b8))
@@ -210,7 +222,7 @@ class Bullet():
         self.img = img
     def paint(self):
         # 窗口使用传输方法  传谁   传到哪个位置
-        window.blit(self.img, (self.x, self.y))
+        screen.blit(self.img, (self.x, self.y))
     def step(self):
         self.y-=2
         #如果子弹碰到上边界，删除当前子弹对象
@@ -237,7 +249,7 @@ class Enemy():
 
     def paint(self):
         # 窗口使用传输方法  传谁   传到哪个位置
-        window.blit(self.img, (self.x, self.y))
+        screen.blit(self.img, (self.x, self.y))
     def move(self):
         self.y+=2
     #定义碰撞功能
@@ -246,19 +258,21 @@ class Enemy():
         return self.x+self.width>=w.x and w.x+w.width>=self.x and \
             self.y+self.height>=w.y and w.y+w.height>=self.y   #敌机在上  敌机在下
 
-
 #根据背景类创建对象
 background=Background(512,768,0,0,bg)
 
+life_num = 1
 #根据玩家类创建玩家
-player=Player(120,78,196,640,hero_img,10)
+player=Player(120,78,196,640,hero_img,life_num)
 
 #游戏中的初始分数为0
-score=0
+# 定义玩家得分和最高分列表
+score = 0
+high_scores = []
 #设置游戏的三种状态
-states={'ready':0,'running':1,'pause':2,'over':3,'leaderboard': 4, 'settings': 5, 'quit': 6}
-#游戏的初始状态 是 'ready':0
-state=states['ready']
+states={'menu':0,'running':1,'pause':2,'over':3,'leaderboard': 4, 'settings': 5, 'quit': 6}
+#游戏的初始状态 是 'menu':0
+state=states['menu']
 
 #鼠标移出
 def MouseOut(x,y):
@@ -300,13 +314,47 @@ def checkHit():
 
 
 #  创建 控制状态方法，专门在这里设计各个状态要做的事
+def game_over():
+    global score, high_scores,state
+    if score > 0:
+        # 如果当前得分大于0，表示玩家获得了分数
+        high_scores.append(score)
+        high_scores.sort(reverse=True)  # 按降序排列最高分列表
+        high_scores = high_scores[:3]  # 只保留前三名最高分
+        with open('high_scores.txt', 'w') as file:
+            # 将最高分列表保存到文件中
+            for high_score in high_scores:
+                file.write(str(high_score) + '\n')
+
+    # 在游戏结束界面显示玩家得分
+    fillText('Your Score: ' + str(score), 30, (10, 60))
+    # 在排行榜界面显示前三名玩家的最高分
+    if state == states['leaderboard']:
+        fillText('Leaderboard', 50, (180, 50))
+        for i, high_score in enumerate(high_scores):
+            fillText(f'Rank {i + 1}: {high_score}', 30, (10, 120 + i * 40))
+    # 等待3秒后返回主菜单
+    time.sleep(3)
+    state = states['menu']
+    return
+
 def controlState():
-    if state==states['ready']:
+    if state==states['menu']:
         # 背景调用显示功能
         background.paint()
         background.move()
-        window.blit(logo1,(26,313))
-        window.blit(sg,(143,470))
+        show_menu(screen)
+    elif state==states['settings']:
+        # 背景调用显示功能
+        background.paint()
+        background.move()
+        show_settings(screen)
+    elif state==states['leaderboard']:
+        # 背景调用显示功能
+        background.paint()
+        background.move()
+        show_leaderboard(screen)
+
     elif state==states['running']:
         # 背景调用显示功能
         background.paint()
@@ -335,12 +383,13 @@ def controlState():
         player.paint()
         fillText('LIFE:' + str(player.life), 30, (10, 0))
         fillText('SCORE:' + str(score), 30, (10, 30))
-        window.blit(pau,(191,319))
+        screen.blit(pau,(191,319))
     elif state==states['over']:
         # 背景调用显示功能
         background.paint()
         background.move()
-        window.blit(over1,(26,313))
+        screen.blit(over1,(26,313))
+        game_over()
     elif state == states['leaderboard']:
         # 显示排行榜界面
         background.paint()
@@ -356,12 +405,211 @@ def controlState():
         pygame.quit()
 
 
-while True:
-    controlState()
+# 创建字体
+menu_font = pygame.font.Font(None, 48)
+font = pygame.font.Font(None, 36)
 
-    #延迟10毫秒
-    pygame.time.delay(10)
-    #不断刷新界面
-    pygame.display.update()
-    handleEvent()
+def render_menu(screen):
+    '''
+    重新渲染主菜单
+    :param screen:
+    :return:
+    '''
+    # 将logo1的位置设在最上方
+    screen.blit(logo1, (26, 0))
+    
+    start_text = menu_font.render("Start Game", True, (255, 255, 255))
+    start_rect = start_text.get_rect()
+    start_rect.centerx = screen.get_rect().centerx
+    start_rect.centery = screen.get_rect().centery - 50
+
+    leaderboard_text = menu_font.render("Leaderboard", True, (255, 255, 255))
+    leaderboard_rect = leaderboard_text.get_rect()
+    leaderboard_rect.centerx = screen.get_rect().centerx
+    leaderboard_rect.centery = screen.get_rect().centery
+
+    settings_text = menu_font.render("Settings", True, (255, 255, 255))
+    settings_rect = settings_text.get_rect()
+    settings_rect.centerx = screen.get_rect().centerx
+    settings_rect.centery = screen.get_rect().centery + 50
+
+    quit_text = menu_font.render("Quit Game", True, (255, 255, 255))
+    quit_rect = quit_text.get_rect()
+    quit_rect.centerx = screen.get_rect().centerx
+    quit_rect.centery = screen.get_rect().centery + 100
+
+    screen.blit(start_text, start_rect)
+    screen.blit(leaderboard_text, leaderboard_rect)
+    screen.blit(settings_text, settings_rect)
+    screen.blit(quit_text, quit_rect)
+    
+    return start_rect, quit_rect, leaderboard_rect, settings_rect
+initial_difficulty = 1  # 初始难度
+initial_life = 3  # 初始生命值
+
+def show_menu(screen):
+    global state
+    render_menu(screen)
+    while True:
+        start_rect, quit_rect, leaderboard_rect, settings_rect = render_menu(screen)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+                if start_rect.collidepoint(mouse_pos):
+                    #start game
+                    state=states['running']
+                    return
+                elif leaderboard_rect.collidepoint(mouse_pos):
+                    show_leaderboard(screen)
+                elif settings_rect.collidepoint(mouse_pos):
+                    # 进入设置界面，允许玩家设置初始难度和生命值
+                    show_settings(screen)
+                elif quit_rect.collidepoint(mouse_pos):
+                    pygame.quit()
+                    sys.exit()
+        pygame.display.flip()
+def show_settings(screen):
+    '''
+    显示设置界面
+    :param screen:
+    :return:
+    '''
+    global initial_difficulty, initial_life
+    setting_font = pygame.font.Font(None, 36)
+    setting_text = font.render("Use UP/DOWN keys to adjust settings:", True, (255, 255, 255))
+    difficulty_text = setting_font.render(f"Initial Difficulty: {initial_difficulty}", True, (255, 255, 255))
+    life_text = setting_font.render(f"Initial Life: {initial_life}", True, (255, 255, 255))
+    back_text = setting_font.render("Back to Menu", True, (255, 255, 255))
+
+    # 设置文本的位置
+    setting_rect = setting_text.get_rect()
+    difficulty_rect = difficulty_text.get_rect()
+    life_rect = life_text.get_rect()
+    back_rect = back_text.get_rect()
+
+    setting_rect.centerx = screen.get_rect().centerx
+    setting_rect.centery = screen.get_rect().centery - 100
+    difficulty_rect.centerx = screen.get_rect().centerx
+    difficulty_rect.centery = screen.get_rect().centery - 50
+    life_rect.centerx = screen.get_rect().centerx
+    life_rect.centery = screen.get_rect().centery
+    back_rect.centerx = screen.get_rect().centerx
+    back_rect.centery = screen.get_rect().centery + 50
+
+
+
+    while True:
+        screen.fill((0, 0, 0))
+
+        # 在屏幕上绘制文本
+        screen.blit(setting_text, setting_rect)
+        screen.blit(difficulty_text, difficulty_rect)
+        screen.blit(life_text, life_rect)
+        screen.blit(back_text, back_rect)
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+                if back_rect.collidepoint(mouse_pos):
+                    return initial_difficulty, initial_life
+
+        keys = pygame.key.get_pressed()
+        # 如果按下 UP 键并且之前没有按下，则增加难度
+        if keys[K_UP] and not key_pressed:
+            initial_difficulty = min(5, initial_difficulty + 1)  # 最大难度为5
+            key_pressed = True
+
+        # 如果按下 DOWN 键并且之前没有按下，则减小难度
+        elif keys[K_DOWN] and not key_pressed:
+            initial_difficulty = max(1, initial_difficulty - 1)  # 最小难度为1
+            key_pressed = True
+
+        # 如果按下 LEFT 键并且之前没有按下，则减小生命值
+        elif keys[K_LEFT] and not key_pressed:
+            initial_life = max(1, initial_life - 1)  # 最小生命值为1
+            key_pressed = True
+
+        # 如果按下 RIGHT 键并且之前没有按下，则增加生命值
+        elif keys[K_RIGHT] and not key_pressed:
+            initial_life = min(5, initial_life + 1)  # 最大生命值为5
+            key_pressed = True
+
+        # 如果没有按下任何键，则将按键状态重置为 False
+        elif not any(keys):
+            key_pressed = False
+
+        difficulty_text = setting_font.render(f"Initial Difficulty: {initial_difficulty}", True, (255, 255, 255))
+        life_text = setting_font.render(f"Initial Life: {initial_life}", True, (255, 255, 255))
+def save_score(score):
+    with open("scores.txt", "a") as file:
+        file.write(str(score) + "\n")
+# 创建一个函数来显示排行榜
+def show_leaderboard(screen):
+    global state
+
+    # 读取分数记录文件
+    scores = []
+    with open("scores.txt", "r") as file:
+        for line in file:
+            scores.append(int(line))
+
+    # 对分数进行排序
+    scores.sort(reverse=True)
+
+    # 只显示前3名玩家的最高分
+    top_scores = scores[:3]
+
+    screen.fill((0, 0, 0))  # 清空屏幕
+    leaderboard_font = pygame.font.Font(None, 36)
+    y = 100  # 垂直位置，用于显示排行榜
+    back_text = leaderboard_font.render("Back to Menu", True, (255, 255, 255))
+    back_rect = back_text.get_rect()
+    back_rect.centerx = screen.get_rect().centerx
+    back_rect.centery = screen.get_rect().centery + 200
+    screen.blit(back_text, back_rect)
+    # 显示前3名玩家的最高分
+    for i, score in enumerate(top_scores):
+        text = leaderboard_font.render(f"Player {i+1}: {score}", True, (255, 255, 255))
+        text_rect = text.get_rect(center=(background.width // 2, y))
+        screen.blit(text, text_rect)
+        y += 50
+
+    pygame.display.flip()
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+                if back_rect.collidepoint(mouse_pos):
+                    state = states['menu']
+                    return
+
+if __name__=="__main__":
+
+    while True:
+        try:
+            # show_menu(screen)
+            controlState()
+            # 延迟10毫秒
+            pygame.time.delay(10)
+            # 不断刷新界面
+            pygame.display.update()
+            handleEvent()
+        except SystemExit:
+            pass
+        except:
+            traceback.print_exc()
+            pygame.quit()
+            input()
+
 

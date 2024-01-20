@@ -535,6 +535,7 @@ def main():
 def save_score(score):
     with open("scores.txt", "a") as file:
         file.write(str(score) + "\n")
+
 if __name__=="__main__":
     try:
         main()
